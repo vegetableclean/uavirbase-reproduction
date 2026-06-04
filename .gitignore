@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Large local data and model artifacts
+dataset/
+Microphone_array/
+Microphone_array.zip
+processed_datasets/
+divided_datasets/
+saved_models/
+*.pth
+*.pt
+*.ckpt
+
+# Logs and local runtime outputs
+logs/
+wandb/
+*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
