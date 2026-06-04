@@ -31,6 +31,35 @@ Reproduced official commit:
 cd3b21ce83d810b269a2038351b2fe2afbf483db
 ```
 
+## Related Paper
+
+This reproduction is based on the dataset and baseline code released for the UaVirBASE paper:
+
+```text
+Jekaterynczuk, G.; Szadkowski, R.; Piotrowski, Z.
+UaVirBASE: A Public-Access Unmanned Aerial Vehicle Sound Source Localization Dataset.
+Applied Sciences, 2025, 15, 5378.
+https://doi.org/10.3390/app15105378
+```
+
+Paper DOI:
+
+```text
+https://doi.org/10.3390/app15105378
+```
+
+Dataset record:
+
+```text
+https://zenodo.org/records/15391924
+```
+
+Official baseline repository:
+
+```text
+https://gitlab.com/g.jekaterynczuk/uavirbase_ssl
+```
+
 ## Project Purpose
 
 The goal of UaVirBASE is to estimate UAV location-related labels from multi-channel acoustic recordings.
@@ -211,6 +240,290 @@ The active reproduced configuration uses Mel spectrograms:
 | Input tensor size | `8 x 256 x 256` |
 
 Each audio channel is converted to a spectrogram. The 8 spectrograms are stacked into an 8-channel tensor.
+
+## Baseline Method Details
+
+This section summarizes exactly what model and processing method are used in the reproduced baseline.
+
+### Model Used
+
+The model is defined in:
+
+```text
+model.py
+```
+
+The main class is:
+
+```python
+Classifier(channel_in=8, num_classes=6)
+```
+
+Despite the class name `Classifier`, the network is used as a regression model. It predicts continuous values for distance, height, azimuth encoding, and orientation encoding.
+
+The architecture is a residual CNN encoder:
+
+```text
+Input: 8-channel spectrogram tensor
+  -> Conv2D input layer
+  -> ResDown block 1
+  -> ResDown block 2
+  -> ResDown block 3
+  -> ResDown block 4
+  -> ResDown block 5
+  -> ResDown block 6
+  -> ResBlock
+  -> Adaptive average pooling
+  -> Fully connected layer
+  -> GELU activation
+  -> Fully connected output layer
+  -> 6 regression outputs
+```
+
+The residual encoder uses channel scaling blocks:
+
+```python
+blocks = (4, 8, 16, 24, 32, 64)
+base channel count = 8
+```
+
+### Audio Processing Method
+
+The audio processing is defined in:
+
+```text
+operation.py
+```
+
+The official Dataset class is:
+
+```python
+AudioSpectrogramDataset
+```
+
+For each sample:
+
+1. Load WAV file with `librosa.load(..., mono=False)`.
+2. Require exactly 8 channels.
+3. For training, randomly crop audio to 1 second.
+4. Normalize waveform:
+
+```python
+waveform = (waveform - waveform.mean()) / (waveform.std() + 1e-9)
+```
+
+5. Convert each channel into a spectrogram.
+6. Convert amplitude to dB using `torchaudio.transforms.AmplitudeToDB`.
+7. Stack 8 channel spectrograms.
+8. Normalize spectrogram values to `[0, 1]`.
+9. Resize spectrogram image to `256 x 256` using Albumentations.
+10. Return tensor shape:
+
+```text
+[8, 256, 256]
+```
+
+### Feature Extraction Method
+
+The repository supports several feature types:
+
+- STFT
+- LFCC
+- MFCC
+- Bark spectrogram
+- Mel spectrogram
+
+The reproduced baseline used the active official variation in `config.py`:
+
+```python
+{
+    "feature_type": "mel",
+    "sample_rate": 96000,
+    "n_fft": 2048,
+    "hop_length": 1024,
+    "n_mfcc": 0,
+    "n_mels": 128,
+    "n_lfcc": 0,
+    "n_barks": 0
+}
+```
+
+So the actual feature extraction method used in this reproduction is:
+
+```text
+8-channel Mel spectrogram input
+```
+
+### Preprocessing Method
+
+The preprocessing is defined in:
+
+```text
+postprocess.py
+```
+
+The official script is interactive and has four options:
+
+| Option | Purpose |
+|---:|---|
+| 1 | Summarize metadata before preprocessing |
+| 2 | Summarize metadata after preprocessing |
+| 3 | Split raw recordings into 75% train and 25% test long WAV files |
+| 4 | Divide long WAV files into short training and test clips |
+
+The reproduction used:
+
+```text
+Option 3
+Option 4
+```
+
+Option 3:
+
+- Reads each raw folder.
+- Reads `label.json`.
+- Reads `output.wav`.
+- Creates label-based folders such as `10_20_45_2`.
+- Splits each recording into train and test sections.
+
+Option 4:
+
+- Converts train long WAV files into 1.5 second clips.
+- Uses 0.5 second step size for overlapping train clips.
+- Converts test long WAV files into 1.0 second clips.
+- Randomly samples up to 20 test clips per folder.
+
+### Label Encoding Method
+
+Folder names encode labels:
+
+```text
+distance_height_azimuth_orientation
+```
+
+Example:
+
+```text
+10_20_45_2
+```
+
+means:
+
+| Field | Meaning |
+|---|---|
+| `10` | distance = 10 m |
+| `20` | height = 20 m |
+| `45` | azimuth = 45 degrees |
+| `2` | drone orientation code |
+
+Orientation code mapping:
+
+| Code | Original label | Angle used |
+|---:|---|---:|
+| 1 | Front | 0 deg |
+| 2 | Left | 270 deg |
+| 3 | Back | 180 deg |
+| 4 | Right | 90 deg |
+
+Distance and height are normalized:
+
+```python
+distance_normalized = distance / 50.0
+height_normalized = height / 50.0
+```
+
+Angles are encoded using sine and cosine:
+
+```python
+angle_sin_normalized = (sin(angle) + 1) / 2
+angle_cos_normalized = (cos(angle) + 1) / 2
+```
+
+### Output Targets
+
+The model outputs 6 values:
+
+```text
+[a, b, c_sin, c_cos, d_sin, d_cos]
+```
+
+where:
+
+| Output | Meaning |
+|---|---|
+| `a` | normalized distance |
+| `b` | normalized height |
+| `c_sin` | normalized sine of azimuth |
+| `c_cos` | normalized cosine of azimuth |
+| `d_sin` | normalized sine of UAV orientation |
+| `d_cos` | normalized cosine of UAV orientation |
+
+### Training Method
+
+Training is defined in:
+
+```text
+main.py
+trainer.py
+```
+
+The training loop:
+
+1. Loads train and test datasets.
+2. Builds DataLoaders.
+3. Initializes the CNN model.
+4. Runs validation at the start of each epoch.
+5. Trains on the training split.
+6. Saves checkpoints every 5 epochs.
+
+Optimizer:
+
+```python
+torch.optim.Adam(lr=0.0002, betas=(0.5, 0.9))
+```
+
+Loss:
+
+```text
+MSE(distance)
++ MSE(height)
++ MSE(azimuth_sin)
++ MSE(azimuth_cos)
++ MSE(orientation_sin)
++ MSE(orientation_cos)
+```
+
+Training configuration used in this reproduction:
+
+| Parameter | Value |
+|---|---:|
+| Epochs | 10 |
+| Batch size | 16 |
+| Learning rate | 0.0002 |
+| Optimizer | Adam |
+| GPU | NVIDIA GeForce RTX 4070 |
+| WandB | Disabled |
+
+### Evaluation Method
+
+The official repository only evaluates inside `trainer.py`; it does not provide a standalone inference script.
+
+This reproduction adds:
+
+```text
+scripts/evaluate_checkpoint.py
+```
+
+The evaluation script:
+
+1. Loads the trained checkpoint.
+2. Loads the checkpoint-saved config.
+3. Rebuilds the same model.
+4. Rebuilds the same test Dataset.
+5. Runs prediction on all test clips.
+6. Decodes distance, height, azimuth, and orientation.
+7. Computes MAE and RMSE.
+8. Saves metrics, examples, and figures.
 
 ## Model Architecture
 
