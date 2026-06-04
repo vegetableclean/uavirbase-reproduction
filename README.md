@@ -745,10 +745,7 @@ Large datasets and checkpoints should be shared through:
 If using UaVirBASE, cite the original paper:
 
 ```text
-Jekaterynczuk, G.; Szadkowski, R.; Piotrowski, Z.
-UaVirBASE: A Public-Access Unmanned Aerial Vehicle Sound Source Localization Dataset.
-Applied Sciences, 2025, 15, 5378.
-https://doi.org/10.3390/app15105378
+Jekateryńczuk, Gabriel, Rafał Szadkowski, and Zbigniew Piotrowski. "UaVirBASE: A public-access unmanned aerial vehicle sound source localization dataset." Applied Sciences 15.10 (2025): 5378.
 ```
 
 ## Final Summary
@@ -765,4 +762,3 @@ The reproduction confirms that:
 - distance and height estimation are reasonable
 - orientation estimation remains difficult
 
-For Crazyflie swarm research, this is a strong starting point, but not a final deployable model. A new Crazyflie-specific, Vicon-labeled, synchronized multi-channel dataset is required.
