@@ -30,7 +30,10 @@ Reproduced official commit:
 ```text
 cd3b21ce83d810b269a2038351b2fe2afbf483db
 ```
-
+The pretrained modeL
+```text
+https://drive.google.com/drive/folders/1-RrsJQK463nWqQcoR-ro2WSK_Bdk_PQW?usp=sharing
+```text
 ## Related Paper
 
 This reproduction is based on the dataset and baseline code released for the UaVirBASE paper:
